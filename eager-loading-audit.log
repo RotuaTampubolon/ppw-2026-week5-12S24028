@@ -1,0 +1,20 @@
+AUDIT KINERJA - BUKTI EAGER LOADING
+=================================
+
+Total Kueri: 3
+
+Kueri 1:
+SQL: select count(*) as aggregate from "bukus"
+Bindings: []
+Waktu: 0.58ms
+
+Kueri 2:
+SQL: select * from "bukus" limit 10 offset 0
+Bindings: []
+Waktu: 0.09ms
+
+Kueri 3:
+SQL: select * from "kategoris" where "kategoris"."id" in (1, 2, 3)
+Bindings: []
+Waktu: 0.17ms
+
