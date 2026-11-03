@@ -6,21 +6,52 @@ use App\Models\Buku;
 use App\Models\Kategori;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
 
 class BukuController extends Controller
 {
     /**
      * Display a listing of the resource.
-     * Menggunakan Eager Loading with('kategori') untuk mencegah N+1 Query Problem.
+     * Menggunakan Eager Loading with('kategori'), withCount('peminjamans'),
+     * filter dinamis when(), paginasi withQueryString(), serta rekapitulasi Query Builder (DB::table).
      */
-    public function index(): View
+    public function index(Request $request): View
     {
-        $bukus = Buku::with('kategori')
-            ->orderBy('judul')
-            ->paginate(10);
+        $search = $request->query('search');
+        $kategoriId = $request->query('kategori_id');
 
-        return view('bukus.index', compact('bukus'));
+        if ($request->filled('search')) {
+            session(['last_buku_search' => $search]);
+        }
+
+        $bukus = Buku::with('kategori')
+            ->withCount('peminjamans')
+            ->when($search, function ($query, $s) {
+                return $query->where(function ($sub) use ($s) {
+                    $sub->where('judul', 'like', "%{$s}%")
+                        ->orWhere('penulis', 'like', "%{$s}%")
+                        ->orWhere('isbn', 'like', "%{$s}%");
+                });
+            })
+            ->when($kategoriId, function ($query, $kid) {
+                return $query->where('kategori_id', $kid);
+            })
+            ->orderBy('judul')
+            ->paginate(10)
+            ->withQueryString();
+
+        // Rekapitulasi Statistik Perpustakaan menggunakan Fluent Query Builder (DB::table)
+        $stats = [
+            'total_judul'        => DB::table('bukus')->count(),
+            'total_stok'         => (int) DB::table('bukus')->sum('stok'),
+            'total_dipinjam'     => DB::table('peminjamans')->where('status', 'dipinjam')->count(),
+            'total_dikembalikan' => DB::table('peminjamans')->where('status', 'dikembalikan')->count(),
+        ];
+
+        $kategoris = Kategori::orderBy('nama_kategori')->get();
+
+        return view('bukus.index', compact('bukus', 'stats', 'kategoris', 'search', 'kategoriId'));
     }
 
     /**
@@ -61,7 +92,9 @@ class BukuController extends Controller
      */
     public function show(Buku $buku): View
     {
-        $buku->load('kategori');
+        $buku->load(['kategori', 'peminjamans' => function ($q) {
+            $q->latest();
+        }]);
 
         return view('bukus.show', compact('buku'));
     }
