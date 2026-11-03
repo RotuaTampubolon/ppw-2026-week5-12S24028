@@ -240,6 +240,27 @@ class BukuSeeder extends Seeder
                 'stok' => 21,
                 'sinopsis' => 'Ilmu di balik kebiasaan manusia dan cara mengubah kebiasaan buruk menjadi produktivitas bisnis.',
             ],
+            // Buku Uji ACID Sesuai Spesifikasi Modul Minggu 6
+            [
+                'isbn' => '9786020300001',
+                'judul' => 'Algoritma Pemrograman Lanjut (Edisi Koleksi Langka - Stok Habis)',
+                'penulis' => 'Donald E. Knuth',
+                'penerbit' => 'Del Academic Press',
+                'tahun_terbit' => 2020,
+                'kategori_id' => $kategoris['KAT-SAI']->id,
+                'stok' => 0, // Stok = 0 untuk pembuktian penolakan transaksi ACID
+                'sinopsis' => 'Buku referensi langka dengan kuota habis (stok = 0) untuk pengujian penolakan peminjaman dan verifikasi rollback transaksi ACID.',
+            ],
+            [
+                'isbn' => '9786020300002',
+                'judul' => 'Arsitektur Komputer & Organisasi Sistem Berbasis RISC-V',
+                'penulis' => 'David A. Patterson & John L. Hennessy',
+                'penerbit' => 'Del Academic Press',
+                'tahun_terbit' => 2022,
+                'kategori_id' => $kategoris['KAT-SAI']->id,
+                'stok' => 1, // Stok = 1 untuk pengujian race condition dan peminjaman kritis
+                'sinopsis' => 'Buku arsitektur modern dengan sisa kuota tinggal 1 eksemplar untuk pengujian locking lockForUpdate().',
+            ],
         ];
 
         foreach ($bukus as $buku) {
