@@ -6,21 +6,51 @@ use App\Models\Buku;
 use App\Models\Kategori;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
 
 class BukuController extends Controller
 {
     /**
      * Display a listing of the resource.
-     * Menggunakan Eager Loading with('kategori') untuk mencegah N+1 Query Problem.
+     * Menggunakan Eager Loading with('kategori'), withCount('peminjamans'),
+     * Query Builder untuk statistik agregat, dan dynamic filter dengan when().
      */
-    public function index(): View
+    public function index(Request $request): View
     {
-        $bukus = Buku::with('kategori')
-            ->orderBy('judul')
-            ->paginate(10);
+        $search     = $request->input('search', '');
+        $kategoriId = $request->input('kategori_id', '');
 
-        return view('bukus.index', compact('bukus'));
+        // Simpan pencarian terakhir ke Session
+        if ($search) {
+            session(['last_buku_search' => $search]);
+        }
+
+        // Query Builder — statistik perpustakaan (tanpa Eloquent ORM)
+        $stats = [
+            'total_judul'        => DB::table('bukus')->count(),
+            'total_stok'         => DB::table('bukus')->sum('stok'),
+            'total_dipinjam'     => DB::table('peminjamans')->where('status', 'dipinjam')->count(),
+            'total_dikembalikan' => DB::table('peminjamans')->where('status', 'dikembalikan')->count(),
+        ];
+
+        // Eager Loading + withCount + dynamic filter dengan when()
+        $bukus = Buku::with('kategori')
+            ->withCount('peminjamans')
+            ->when($search, fn ($q, $s) => $q->where(function ($inner) use ($s) {
+                $inner->where('judul', 'like', "%{$s}%")
+                      ->orWhere('penulis', 'like', "%{$s}%")
+                      ->orWhere('isbn', 'like', "%{$s}%");
+            }))
+            ->when($kategoriId, fn ($q, $k) => $q->where('kategori_id', $k))
+            ->orderBy('judul')
+            ->paginate(10)
+            ->withQueryString();
+
+        $kategoris      = Kategori::orderBy('nama_kategori')->get();
+        $lastBukuSearch = session('last_buku_search');
+
+        return view('bukus.index', compact('bukus', 'stats', 'kategoris', 'search', 'kategoriId', 'lastBukuSearch'));
     }
 
     /**
