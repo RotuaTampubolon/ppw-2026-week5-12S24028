@@ -41,15 +41,44 @@
                               {{ request()->routeIs('bukus.*') ? 'bg-white text-purple-900' : 'text-white hover:bg-purple-600' }}">
                         📚 Daftar Buku
                     </a>
+
+                    @auth
                     <a href="{{ route('kategoris.index') }}"
                        class="px-4 py-2 rounded-md text-sm font-medium transition-colors
                               {{ request()->routeIs('kategoris.*') ? 'bg-white text-purple-900' : 'text-white hover:bg-purple-600' }}">
                         🗂️ Kategori
                     </a>
-                    <a href="{{ route('bukus.create') }}"
-                       class="ml-2 px-4 py-2 rounded-md text-sm font-medium bg-yellow-400 text-purple-900 hover:bg-yellow-300 font-semibold transition-colors">
-                        + Tambah Buku
+                    <a href="{{ route('peminjamans.index') }}"
+                       class="px-4 py-2 rounded-md text-sm font-medium transition-colors
+                              {{ request()->routeIs('peminjamans.*') ? 'bg-white text-purple-900' : 'text-white hover:bg-purple-600' }}">
+                        📋 Peminjaman
                     </a>
+                    @endauth
+
+                    {{-- Auth State --}}
+                    @auth
+                        {{-- Info Pustakawan + Logout --}}
+                        <div class="flex items-center space-x-2 ml-2 pl-2 border-l border-purple-500">
+                            <div class="text-right hidden md:block">
+                                <p class="text-white text-xs font-semibold">{{ Auth::user()->name }}</p>
+                                @if(session('login_timestamp'))
+                                    <p class="text-purple-300 text-xs">Login: {{ session('login_timestamp') }}</p>
+                                @endif
+                            </div>
+                            <form action="{{ route('logout') }}" method="POST">
+                                @csrf
+                                <button type="submit"
+                                    class="px-3 py-2 rounded-md text-sm font-medium bg-red-600 text-white hover:bg-red-500 transition-colors">
+                                    🚪 Logout
+                                </button>
+                            </form>
+                        </div>
+                    @else
+                        <a href="{{ route('login') }}"
+                           class="ml-2 px-4 py-2 rounded-md text-sm font-medium bg-yellow-400 text-purple-900 hover:bg-yellow-300 font-semibold transition-colors">
+                            🔑 Login Pustakawan
+                        </a>
+                    @endauth
                 </div>
             </div>
         </div>
@@ -95,7 +124,7 @@
 
     {{-- Footer --}}
     <footer class="bg-purple-900 text-purple-300 text-center text-sm py-4 mt-12">
-        <p>© {{ date('Y') }} <strong class="text-white">SIPUS-Del</strong> — Institut Teknologi Del · Pemrograman & Pengujian Web</p>
+        <p>© {{ date('Y') }} <strong class="text-white">SIPUS-Del</strong> — Institut Teknologi Del · Pemrograman &amp; Pengujian Web</p>
     </footer>
 
 </body>
