@@ -9,12 +9,18 @@
             </nav>
             <h1 class="text-2xl font-bold text-gray-900 mt-2">📖 {{ $buku->judul }}</h1>
         </div>
+        @auth
         <div class="flex space-x-2">
+            <a href="{{ route('peminjamans.create', $buku) }}"
+               class="px-4 py-2 bg-green-600 text-white hover:bg-green-700 font-medium rounded-lg text-sm transition-colors shadow-sm">
+                📋 Pinjam Buku
+            </a>
             <a href="{{ route('bukus.edit', $buku) }}"
                class="px-4 py-2 bg-yellow-100 text-yellow-800 hover:bg-yellow-200 font-medium rounded-lg text-sm transition-colors">
                 ✏️ Edit Buku
             </a>
         </div>
+        @endauth
     </div>
 
     <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
