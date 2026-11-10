@@ -4,6 +4,7 @@ use App\Http\Controllers\AuthController;
 use App\Http\Controllers\BukuController;
 use App\Http\Controllers\KategoriController;
 use App\Http\Controllers\PeminjamanController;
+use App\Http\Controllers\Soap\LibrarySoapController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -59,3 +60,7 @@ Route::middleware('auth')->group(function () {
     Route::post('/peminjamans/buku/{buku}', [PeminjamanController::class, 'store'])->name('peminjamans.store');
     Route::patch('/peminjamans/{peminjaman}/kembalikan', [PeminjamanController::class, 'kembalikan'])->name('peminjamans.kembalikan');
 });
+
+   // Layanan SOAP Bebas Pustaka (Minggu 09)
+   Route::get('/soap/sipus.wsdl', [LibrarySoapController::class, 'wsdl']);
+   Route::post('/soap/sipus', [LibrarySoapController::class, 'handle']);
