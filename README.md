@@ -1,3 +1,65 @@
+# SIPUS-Del API v1 — Praktikum Minggu 09
+
+## 1. Identitas Mahasiswa
+
+- Nama Lengkap: `[ISI: nama lengkap]`
+- NIM: `[ISI: NIM]`
+- Kelas: `[ISI: kelas]`
+- Program Studi: `[ISI: program studi]`
+- Akun uji: `pustakawan@del.ac.id` / `password123`
+
+## 2. Analisis Kebutuhan & Kelayakan Web Services
+
+| Peran | Implementasi SIPUS-Del |
+|---|---|
+| SOAP Provider | Endpoint clearance untuk sistem Yudisium |
+| REST Provider | Katalog dan sirkulasi untuk Mobile/Kiosk |
+| REST Consumer | Metadata ISBN dari OpenLibrary |
+
+SOAP cocok untuk kontrak XML formal dan operasi integrasi enterprise; REST lebih ringan untuk Mobile/Kiosk karena stateless, JSON, HTTP verbs/status semantik, cacheability, dan kontrak OpenAPI.
+
+## 3. Tabel Katalog Endpoint
+
+| Method | URI | Auth | Deskripsi | Status |
+|---|---|---|---|---|
+| POST | `/soap/sipus` | Publik | CheckClearanceStatus | 200/400 |
+| POST | `/api/v1/auth/login` | Publik | Terbitkan bearer token | 200/401 |
+| GET | `/api/v1/bukus` | Publik | Katalog terpaginasi | 200 |
+| POST/PUT/PATCH/DELETE | `/api/v1/bukus` | Sanctum | Mutasi katalog | 201/200/204/409/422 |
+| GET/POST | `/api/v1/peminjamans` | Sanctum | Sirkulasi peminjaman | 200/201/409/422 |
+| PATCH | `/api/v1/peminjamans/{id}/kembalikan` | Sanctum | Pengembalian atomik | 200/409 |
+| GET | `/api/v1/bukus/{id}/referensi-eksternal` | Publik | Consumer OpenLibrary | 200/404/502/504 |
+
+## 4. Panduan Instalasi & Pengujian Cepat
+
+```powershell
+composer install
+Copy-Item .env.example .env
+php artisan key:generate
+New-Item database/database.sqlite -ItemType File
+php artisan migrate:fresh --seed
+php artisan serve
+php artisan test
+```
+
+Impor `docs/SIPUS-Del-APIv1.postman_collection.json` ke Postman. Selalu gunakan header `Accept: application/json`; PowerShell memakai `curl.exe`. Jika cURL Windows gagal SSL, isi `curl.cainfo` pada `php.ini` dengan path `cacert.pem`. Deprecation PHP 8.5 pada konfigurasi bawaan dapat diabaikan sesuai konfigurasi lingkungan.
+
+## 5. Galeri Bukti Pengujian
+
+Slot screenshot berikut diisi manual mahasiswa:
+
+- (a) SOAP XML dan `<soap:Fault>` — `docs/screenshots/01-soap.png` — `[TEMPEL SCREENSHOT DI SINI]`
+- (b) Login token — `docs/screenshots/02-login.png` — `[TEMPEL SCREENSHOT DI SINI]`
+- (c) Katalog pagination dan HATEOAS — `docs/screenshots/03-katalog.png` — `[TEMPEL SCREENSHOT DI SINI]`
+- (d) POST buku 201 dan Location — `docs/screenshots/04-post-buku.png` — `[TEMPEL SCREENSHOT DI SINI]`
+- (e) PUT vs PATCH — `docs/screenshots/05-put-patch.png` — `[TEMPEL SCREENSHOT DI SINI]`
+- (f) Sukses, stok habis 422, dan duplikat 409 — `docs/screenshots/06-peminjaman.png` — `[TEMPEL SCREENSHOT DI SINI]`
+- (g) GitHub REST API dengan token disensor — `docs/screenshots/07-github.png` — `[TEMPEL SCREENSHOT DI SINI]`
+
+Ambil bukti dengan menjalankan `php artisan serve`, login untuk memperoleh token, lalu jalankan request Postman dan simpan respons/status/header sesuai nama slot.
+
+---
+
 # SIPUS-Del (Sistem Informasi Perpustakaan Kampus Del)
 **Pengembangan Lanjutan Tahap 2 — Praktikum Minggu 06**
 

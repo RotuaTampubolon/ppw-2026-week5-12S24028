@@ -1,0 +1,90 @@
+{
+  "info": {
+    "name": "SIPUS-Del API v1",
+    "_postman_id": "sipus-del-api-v1",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "base_url", "value": "http://localhost:8000/api/v1" },
+    { "key": "token", "value": "" },
+    { "key": "buku_id", "value": "1" },
+    { "key": "peminjaman_id", "value": "1" }
+  ],
+  "item": [
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Login",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Accept", "value": "application/json" }, { "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"email\":\"pustakawan@del.ac.id\",\"password\":\"password123\",\"device_name\":\"postman\"}" },
+            "url": "{{base_url}}/auth/login"
+          },
+          "event": [{ "listen": "test", "script": { "exec": ["pm.test('Login berhasil', function () { pm.response.to.have.status(200); });", "pm.collectionVariables.set('token', pm.response.json().data.access_token);"] } }]
+        },
+        {
+          "name": "401 Tanpa Token",
+          "request": { "method": "GET", "header": [{ "key": "Accept", "value": "application/json" }], "url": "{{base_url}}/auth/me" },
+          "event": [{ "listen": "test", "script": { "exec": ["pm.test('Unauthorized', function () { pm.response.to.have.status(401); });"] } }]
+        }
+      ]
+    },
+    {
+      "name": "Buku",
+      "item": [
+        {
+          "name": "GET Katalog",
+          "request": { "method": "GET", "header": [{ "key": "Accept", "value": "application/json" }], "url": "{{base_url}}/bukus?tersedia=1&sort=stok&dir=desc" },
+          "event": [{ "listen": "test", "script": { "exec": ["pm.test('Katalog 200', function () { pm.response.to.have.status(200); });"] } }]
+        },
+        {
+          "name": "POST Buku 201",
+          "request": { "method": "POST", "header": [{ "key": "Accept", "value": "application/json" }, { "key": "Content-Type", "value": "application/json" }, { "key": "Authorization", "value": "Bearer {{token}}" }], "body": { "mode": "raw", "raw": "{\"isbn\":\"9789999999999\",\"judul\":\"Buku API Baru\",\"penulis\":\"Penulis API\",\"penerbit\":\"Penerbit API\",\"tahun_terbit\":2024,\"kategori_id\":1,\"stok\":2,\"sinopsis\":\"Uji API\"}" }, "url": "{{base_url}}/bukus" },
+          "event": [{ "listen": "test", "script": { "exec": ["pm.test('Created', function () { pm.response.to.have.status(201); });"] } }]
+        },
+        {
+          "name": "404 Buku",
+          "request": { "method": "GET", "header": [{ "key": "Accept", "value": "application/json" }], "url": "{{base_url}}/bukus/99999" },
+          "event": [{ "listen": "test", "script": { "exec": ["pm.test('Not found', function () { pm.response.to.have.status(404); });"] } }]
+        },
+        {
+          "name": "PATCH Kosong 400",
+          "request": { "method": "PATCH", "header": [{ "key": "Accept", "value": "application/json" }, { "key": "Content-Type", "value": "application/json" }, { "key": "Authorization", "value": "Bearer {{token}}" }], "body": { "mode": "raw", "raw": "{}" }, "url": "{{base_url}}/bukus/{{buku_id}}" },
+          "event": [{ "listen": "test", "script": { "exec": ["pm.test('Bad request', function () { pm.response.to.have.status(400); });"] } }]
+        },
+        {
+          "name": "DELETE Conflict Aktif",
+          "request": { "method": "DELETE", "header": [{ "key": "Accept", "value": "application/json" }, { "key": "Authorization", "value": "Bearer {{token}}" }], "url": "{{base_url}}/bukus/{{buku_id}}" },
+          "event": [{ "listen": "test", "script": { "exec": ["pm.test('Conflict', function () { pm.response.to.have.status(409); });"] } }]
+        }
+      ]
+    },
+    {
+      "name": "Peminjaman",
+      "item": [
+        {
+          "name": "POST Peminjaman",
+          "request": { "method": "POST", "header": [{ "key": "Accept", "value": "application/json" }, { "key": "Content-Type", "value": "application/json" }, { "key": "Authorization", "value": "Bearer {{token}}" }], "body": { "mode": "raw", "raw": "{\"buku_id\":{{buku_id}},\"nim_peminjam\":\"12S99999\",\"nama_peminjam\":\"Mahasiswa API\"}" }, "url": "{{base_url}}/peminjamans" },
+          "event": [{ "listen": "test", "script": { "exec": ["pm.test('Loan created or conflict', function () { pm.expect([201,409,422]).to.include(pm.response.code); });"] } }]
+        },
+        {
+          "name": "Kembalikan Dua Kali 409",
+          "request": { "method": "PATCH", "header": [{ "key": "Accept", "value": "application/json" }, { "key": "Authorization", "value": "Bearer {{token}}" }], "url": "{{base_url}}/peminjamans/{{peminjaman_id}}/kembalikan" },
+          "event": [{ "listen": "test", "script": { "exec": ["pm.test('Return response', function () { pm.expect([200,409]).to.include(pm.response.code); });"] } }]
+        }
+      ]
+    },
+    {
+      "name": "Eksternal",
+      "item": [
+        {
+          "name": "OpenLibrary",
+          "request": { "method": "GET", "header": [{ "key": "Accept", "value": "application/json" }], "url": "{{base_url}}/bukus/{{buku_id}}/referensi-eksternal" },
+          "event": [{ "listen": "test", "script": { "exec": ["pm.test('External response', function () { pm.expect([200,404,502,504]).to.include(pm.response.code); });"] } }]
+        }
+      ]
+    }
+  ]
+}

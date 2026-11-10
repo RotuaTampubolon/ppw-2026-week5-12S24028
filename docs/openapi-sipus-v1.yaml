@@ -1,0 +1,188 @@
+openapi: 3.0.3
+info:
+  title: SIPUS-Del API
+  version: 1.0.0
+  description: REST API katalog dan sirkulasi perpustakaan SIPUS-Del.
+servers:
+  - url: http://localhost:8000/api/v1
+security:
+  - BearerAuth: []
+paths:
+  /auth/login:
+    post:
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email: { type: string, format: email }
+                password: { type: string, format: password }
+                device_name: { type: string }
+      responses:
+        '200': { description: Token diterbitkan }
+        '401': { $ref: '#/components/responses/Problem' }
+  /auth/me:
+    get:
+      responses:
+        '200': { description: Profil pengguna }
+        '401': { $ref: '#/components/responses/Problem' }
+  /auth/logout:
+    post:
+      responses:
+        '200': { description: Token dicabut }
+  /bukus:
+    get:
+      security: []
+      parameters:
+        - { $ref: '#/components/parameters/Search' }
+        - { name: kategori_id, in: query, schema: { type: integer } }
+        - { name: tersedia, in: query, schema: { type: string, enum: ['1'] } }
+        - { name: sort, in: query, schema: { type: string, enum: [judul, stok, tahun_terbit] } }
+        - { name: dir, in: query, schema: { type: string, enum: [asc, desc] } }
+      responses:
+        '200': { description: Daftar buku }
+    post:
+      requestBody:
+        required: true
+        content:
+          application/json: { schema: { $ref: '#/components/schemas/BukuInput' } }
+      responses:
+        '201': { description: Buku dibuat }
+        '422': { $ref: '#/components/responses/Problem' }
+  /bukus/{id}:
+    parameters:
+      - { $ref: '#/components/parameters/Id' }
+    get:
+      security: []
+      responses:
+        '200': { description: Detail buku }
+        '404': { $ref: '#/components/responses/Problem' }
+    put:
+      requestBody:
+        required: true
+        content:
+          application/json: { schema: { $ref: '#/components/schemas/BukuInput' } }
+      responses:
+        '200': { description: Buku diperbarui }
+    patch:
+      requestBody:
+        required: true
+        content:
+          application/json: { schema: { $ref: '#/components/schemas/BukuInputPatch' } }
+      responses:
+        '200': { description: Buku diperbarui sebagian }
+        '400': { $ref: '#/components/responses/Problem' }
+    delete:
+      responses:
+        '204': { description: Buku dihapus }
+        '409': { $ref: '#/components/responses/Problem' }
+  /bukus/{id}/referensi-eksternal:
+    get:
+      security: []
+      parameters:
+        - { $ref: '#/components/parameters/Id' }
+      responses:
+        '200': { description: Metadata OpenLibrary }
+        '502': { $ref: '#/components/responses/Problem' }
+        '504': { $ref: '#/components/responses/Problem' }
+  /peminjamans:
+    get:
+      parameters:
+        - { name: status, in: query, schema: { type: string, enum: [dipinjam, dikembalikan] } }
+        - { name: nim, in: query, schema: { type: string } }
+      responses:
+        '200': { description: Daftar peminjaman }
+    post:
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [buku_id, nim_peminjam, nama_peminjam]
+              properties:
+                buku_id: { type: integer }
+                nim_peminjam: { type: string }
+                nama_peminjam: { type: string }
+                durasi_hari: { type: integer, minimum: 1, maximum: 30, default: 7 }
+      responses:
+        '201': { description: Peminjaman dibuat }
+        '409': { $ref: '#/components/responses/Problem' }
+        '422': { $ref: '#/components/responses/Problem' }
+  /peminjamans/{id}:
+    get:
+      parameters: [{ $ref: '#/components/parameters/Id' }]
+      responses:
+        '200': { description: Detail peminjaman }
+        '404': { $ref: '#/components/responses/Problem' }
+  /peminjamans/{id}/kembalikan:
+    patch:
+      parameters: [{ $ref: '#/components/parameters/Id' }]
+      responses:
+        '200': { description: Buku dikembalikan }
+        '409': { $ref: '#/components/responses/Problem' }
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+  parameters:
+    Id:
+      name: id
+      in: path
+      required: true
+      schema: { type: integer }
+    Search:
+      name: search
+      in: query
+      schema: { type: string }
+  responses:
+    Problem:
+      description: RFC 7807 problem detail
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+  schemas:
+    Buku:
+      allOf:
+        - $ref: '#/components/schemas/BukuInput'
+        - type: object
+          required: [id]
+          properties: { id: { type: integer } }
+    BukuInput:
+      type: object
+      required: [isbn, judul, penulis, penerbit, tahun_terbit, kategori_id, stok]
+      properties:
+        isbn: { type: string, maxLength: 20 }
+        judul: { type: string, minLength: 5, maxLength: 255 }
+        penulis: { type: string, maxLength: 150 }
+        penerbit: { type: string, maxLength: 150 }
+        tahun_terbit: { type: integer, minimum: 1900 }
+        kategori_id: { type: integer }
+        stok: { type: integer, minimum: 0 }
+        sinopsis: { type: string, nullable: true }
+    BukuInputPatch:
+      allOf: [{ $ref: '#/components/schemas/BukuInput' }]
+      required: []
+    Peminjaman:
+      type: object
+      properties:
+        id: { type: integer }
+        kode_pinjam: { type: string }
+        buku_id: { type: integer }
+        nim_peminjam: { type: string }
+        nama_peminjam: { type: string }
+        status: { type: string, enum: [dipinjam, dikembalikan] }
+    Problem:
+      type: object
+      required: [type, title, status, detail, instance]
+      properties:
+        type: { type: string, format: uri }
+        title: { type: string }
+        status: { type: integer }
+        detail: { type: string }
+        instance: { type: string }
