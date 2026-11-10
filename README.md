@@ -1,62 +1,242 @@
 # SIPUS-Del API v1 — Praktikum Minggu 09
 
+**Web Services & REST API pada Laravel 11.x** — Tugas Mandiri Lanjutan SIPUS-Del Tahap 3 (PPW 12S3101, Institut Teknologi Del).
+Cabang: `week9-rest-api` · Antarmuka web Blade Minggu 6 tetap utuh (dokumentasinya ada di bagian *Lampiran* paling bawah).
+
+## Daftar Isi
+1. [Identitas Mahasiswa](#1-identitas-mahasiswa)
+2. [Analisis Kebutuhan & Kelayakan Web Services](#2-analisis-kebutuhan--kelayakan-web-services)
+3. [Tabel Katalog Endpoint (SOAP & REST API v1)](#3-tabel-katalog-endpoint-soap--rest-api-v1)
+4. [Panduan Instalasi & Pengujian Cepat](#4-panduan-instalasi--pengujian-cepat)
+5. [Galeri Bukti Pengujian](#5-galeri-bukti-pengujian)
+6. [Pemetaan terhadap Spesifikasi & Rubrik](#6-pemetaan-terhadap-spesifikasi--rubrik)
+7. [Lampiran — Dokumentasi Minggu 06](#lampiran--dokumentasi-minggu-06)
+
+---
+
 ## 1. Identitas Mahasiswa
 
-- Nama Lengkap: `[ISI: nama lengkap]`
-- NIM: `[ISI: NIM]`
-- Kelas: `[ISI: kelas]`
-- Program Studi: `[ISI: program studi]`
-- Akun uji: `pustakawan@del.ac.id` / `password123`
+| Item | Isi |
+|---|---|
+| Nama Lengkap | Rotua Immanuela Tampubolon |
+| NIM | `12S24028` |
+| Kelas | `[ISI: kelas]` |
+| Program Studi | Sarjana Sistem Informasi, Fakultas Informatika dan Teknik Elektro, Institut Teknologi Del |
+| Mata Kuliah | Pemrograman dan Pengujian Aplikasi Web (12S3101) — Dosen: Chandro Pardede, S.Kom., M.Sc. |
+| Repositori | `https://github.com/RotuaTampubolon/ppw-2026-week5-12S24028` (branch `week9-rest-api`) |
+
+**Akun uji (dari seeder lokal):** `pustakawan@del.ac.id` / `password123`
+
+---
 
 ## 2. Analisis Kebutuhan & Kelayakan Web Services
 
-| Peran | Implementasi SIPUS-Del |
-|---|---|
-| SOAP Provider | Endpoint clearance untuk sistem Yudisium |
-| REST Provider | Katalog dan sirkulasi untuk Mobile/Kiosk |
-| REST Consumer | Metadata ISBN dari OpenLibrary |
+### 2.1 Tiga kebutuhan integrasi UPT Perpustakaan
 
-SOAP cocok untuk kontrak XML formal dan operasi integrasi enterprise; REST lebih ringan untuk Mobile/Kiosk karena stateless, JSON, HTTP verbs/status semantik, cacheability, dan kontrak OpenAPI.
+SIPUS-Del dari Minggu 6 adalah aplikasi monolitik berorientasi manusia (HTML + session cookie). UPT Perpustakaan kini membutuhkan komunikasi **mesin-ke-mesin** untuk tiga skenario berikut.
 
-## 3. Tabel Katalog Endpoint
-
-| Method | URI | Auth | Deskripsi | Status |
+| # | Kebutuhan | Peran SIPUS-Del | Protokol | Pihak lawan |
 |---|---|---|---|---|
-| POST | `/soap/sipus` | Publik | CheckClearanceStatus | 200/400 |
-| POST | `/api/v1/auth/login` | Publik | Terbitkan bearer token | 200/401 |
-| GET | `/api/v1/bukus` | Publik | Katalog terpaginasi | 200 |
-| POST/PUT/PATCH/DELETE | `/api/v1/bukus` | Sanctum | Mutasi katalog | 201/200/204/409/422 |
-| GET/POST | `/api/v1/peminjamans` | Sanctum | Sirkulasi peminjaman | 200/201/409/422 |
-| PATCH | `/api/v1/peminjamans/{id}/kembalikan` | Sanctum | Pengembalian atomik | 200/409 |
-| GET | `/api/v1/bukus/{id}/referensi-eksternal` | Publik | Consumer OpenLibrary | 200/404/502/504 |
+| 1 | Cek bebas pustaka untuk Yudisium | **Service Provider** | SOAP (XML) | Aplikasi Administrasi Yudisium (sistem legacy berbasis SOAP) |
+| 2 | Katalog & sirkulasi buku untuk Mobile/Kiosk | **Service Provider** | REST (JSON) | Aplikasi Mobile Perpustakaan dan Kiosk Mandiri |
+| 3 | Pengayaan metadata buku via ISBN | **Service Consumer** | REST (JSON) | OpenLibrary API (`openlibrary.org`) |
+
+### 2.2 Analisis kelayakan (feasibility)
+
+| Aspek | Provider SOAP (bebas pustaka) | Provider REST (katalog & sirkulasi) | Consumer REST (OpenLibrary) |
+|---|---|---|---|
+| **Kepemilikan domain** | Data pinjaman adalah domain sah perpustakaan, jadi layak diekspos terkontrol | Katalog dan stok adalah domain inti SIPUS-Del | Metadata halaman/penerbit/cover bukan domain inti, jadi layak dikonsumsi |
+| **Kelayakan teknis** | Layak. Hanya satu operasi (`CheckClearanceStatus`) dan satu kueri `COUNT` atas tabel `peminjamans` | Layak. Logika ACID sudah ada sejak Minggu 6 dan tinggal diekspos lewat `routes/api.php` | Layak. Cukup fasad `Http` dengan `timeout(8)` dan penanganan galat |
+| **Biaya & risiko** | Rendah. Dipilih karena sistem Yudisium tidak dapat diubah | Rendah. Stateless sehingga mudah diskalakan di belakang load balancer | Lebih hemat dibanding membangun basis metadata sendiri. Risiko: ketergantungan pada pihak luar, ditutup dengan fallback 404/502/504 |
+| **Keputusan** | Dibangun | Dibangun | Dikonsumsi |
+
+### 2.3 Mengapa REST untuk Mobile/Kiosk, bukan SOAP
+
+| Aspek | SOAP (`/soap/sipus`) | REST (`/api/v1/...`) | Dampak untuk studi kasus perpustakaan |
+|---|---|---|---|
+| Format pesan | Wajib XML `<soap:Envelope>`, verbose | JSON ringkas | Kiosk/Mobile menghemat bandwidth dan CPU parsing |
+| Pemakaian HTTP | Hanya `POST` sebagai pipa | Verb dan status code semantik (GET/POST/PUT/PATCH/DELETE; 200/201/204/404/409/422) | Klien membaca niat dan hasil operasi dari baris pertama request/response |
+| Kontrak | Wajib WSDL | OpenAPI 3.0 (`docs/openapi-sipus-v1.yaml`) | Dokumentasi dapat diuji langsung di Swagger Editor dan Postman |
+| State | Tidak mengandalkan session pada implementasi ini | Wajib stateless: Sanctum Bearer Token, tanpa session/CSRF | Request dapat dilayani server mana pun |
+| Cacheability | Praktis tidak ada (semua `POST`) | `GET` katalog dapat di-cache | Katalog yang sering dibaca Kiosk lebih ringan |
+| Pola galat | `<soap:Fault>` di dalam body | RFC 7807 `application/problem+json` | Frontend menampilkan pesan galat dengan struktur yang dapat diprediksi |
+| Cocok untuk | Integrasi enterprise/legacy | Mobile, SPA, Kiosk, mitra baru | **SOAP hanya dipakai di titik integrasi Yudisium, REST untuk seluruh sisanya** |
+
+---
+
+## 3. Tabel Katalog Endpoint (SOAP & REST API v1)
+
+Semua rute REST berada di `routes/api.php` (prefix `/api`, stateless). Selalu kirim header `Accept: application/json`. Galat pada `/api/*` selalu berformat RFC 7807.
+
+### 3.1 SOAP (`routes/web.php`, dikecualikan dari CSRF via `soap/*`)
+
+| Method | URI | Auth | Deskripsi | Kode Status |
+|---|---|---|---|---|
+| GET | `/soap/sipus.wsdl` | Publik | Kontrak WSDL operasi `CheckClearanceStatus` | 200 |
+| POST | `/soap/sipus` | Publik | Menerima `<nim_peminjam>`, mengembalikan `<active_loans>` dan `<is_cleared>` | 200; 500 + `<soap:Fault>` (body kosong, XML cacat, operasi tidak dikenali, `<nim_peminjam>` kosong) |
+
+### 3.2 REST API v1
+
+| Method | URI | Auth | Deskripsi | Kode Status |
+|---|---|---|---|---|
+| POST | `/api/v1/auth/login` | Publik | Verifikasi kredensial dan terbitkan Bearer Token | 200, 401, 422 |
+| GET | `/api/v1/auth/me` | Bearer | Profil pemilik token aktif | 200, 401 |
+| POST | `/api/v1/auth/logout` | Bearer | Cabut (revoke) token yang sedang dipakai | 200, 401 |
+| GET | `/api/v1/bukus` | Publik | Katalog terpaginasi. Query: `search`, `kategori_id`, `tersedia=1`, `sort` (`judul`/`stok`/`tahun_terbit`), `dir`, `per_page` | 200, 422 |
+| GET | `/api/v1/bukus/{id}` | Publik | Detail buku beserta objek kategori dan `_links` | 200, 404 |
+| GET | `/api/v1/bukus/{id}/referensi-eksternal` | Publik | **Consumer** OpenLibrary: halaman, penerbit, pratinjau, cover | 200, 404, 502, 504 |
+| POST | `/api/v1/bukus` | Bearer | Tambah buku (ISBN unik, stok ≥ 0, `kategori_id` valid) | **201 + header `Location`**, 401, 422 |
+| PUT | `/api/v1/bukus/{id}` | Bearer | Ganti seluruh atribut (full replacement; `sinopsis` yang tidak dikirim menjadi `null`) | 200, 401, 404, 422 |
+| PATCH | `/api/v1/bukus/{id}` | Bearer | Ubah sebagian atribut (`sometimes\|required`) | 200, 400 (payload kosong), 401, 404, 422 |
+| DELETE | `/api/v1/bukus/{id}` | Bearer | Hapus buku. Ditolak bila ada peminjaman aktif | **204**, 401, 404, **409** |
+| GET | `/api/v1/peminjamans` | Bearer | Daftar transaksi terpaginasi. Query: `status=dipinjam\|dikembalikan`, `nim`, `per_page` | 200, 401, 422 |
+| GET | `/api/v1/peminjamans/{id}` | Bearer | Detail satu transaksi | 200, 401, 404 |
+| POST | `/api/v1/peminjamans` | Bearer | Catat peminjaman dalam `DB::transaction()` + `lockForUpdate()`. Body: `buku_id`, `nim_peminjam`, `nama_peminjam`, `durasi_hari` (opsional, default 7) | **201 + `Location`**, 401, **409** (NIM masih meminjam buku yang sama), **422** (stok habis / validasi) |
+| PATCH | `/api/v1/peminjamans/{id}/kembalikan` | Bearer | Kembalikan buku (status, `tanggal_kembali`, stok +1) secara atomik | 200, 401, 404, **409** (sudah dikembalikan) |
+
+### 3.3 Kontrol Hypermedia (HATEOAS)
+
+| Resource | Link dinamis | Kondisi muncul |
+|---|---|---|
+| `BukuResource` | `_links.pinjam_buku` (POST `/api/v1/peminjamans`) | Hanya jika `stok > 0` |
+| `PeminjamanResource` | `_links.kembalikan_buku` (PATCH `.../kembalikan`) | Hanya jika `status === 'dipinjam'` |
+
+---
 
 ## 4. Panduan Instalasi & Pengujian Cepat
 
+### 4.1 Instalasi
+
+Prasyarat: PHP sesuai `composer.lock` (≥ 8.4; lingkungan pengembangan memakai PHP 8.5), Composer, ekstensi `curl`, `xml`, `dom`, `simplexml`, `mbstring`, `openssl`, `pdo_sqlite`.
+
 ```powershell
+git clone https://github.com/RotuaTampubolon/ppw-2026-week5-12S24028.git
+cd ppw-2026-week5-12S24028
+git checkout week9-rest-api
+
 composer install
-Copy-Item .env.example .env
+Copy-Item .env.example .env        # Linux/macOS: cp .env.example .env
 php artisan key:generate
-New-Item database/database.sqlite -ItemType File
+New-Item database/database.sqlite -ItemType File   # Linux/macOS: touch database/database.sqlite
 php artisan migrate:fresh --seed
 php artisan serve
-php artisan test
 ```
 
-Impor `docs/SIPUS-Del-APIv1.postman_collection.json` ke Postman. Selalu gunakan header `Accept: application/json`; PowerShell memakai `curl.exe`. Jika cURL Windows gagal SSL, isi `curl.cainfo` pada `php.ini` dengan path `cacert.pem`. Deprecation PHP 8.5 pada konfigurasi bawaan dapat diabaikan sesuai konfigurasi lingkungan.
+Pengujian otomatis (terminal lain): `php artisan test`. Berkas `tests/Feature/Api/ApiV1Test.php` memuat 4 skenario:
+
+| Skenario | Yang dibuktikan |
+|---|---|
+| `test_catalog_and_problem_responses` | `GET /bukus` 200 dan `GET /bukus/99999` 404 bertipe `application/problem+json` |
+| `test_book_mutations_require_auth_and_put_patch_differ` | `POST` tanpa token 401. `PATCH {stok}` tidak menyentuh `sinopsis`, sedangkan `PUT` tanpa `sinopsis` mengosongkannya |
+| `test_borrow_return_and_dynamic_links` | Stok −1 saat pinjam, link `kembalikan_buku` muncul, stok habis 422, stok +1 saat kembali, kembalikan ulang 409 |
+| `test_external_consumer_handles_success_and_timeout` | `Http::fake` untuk sukses 200 dan `ConnectionException` menjadi 504 |
+
+### 4.2 Pengujian cepat dengan Postman
+
+1. Impor `docs/SIPUS-Del-APIv1.postman_collection.json` ke Postman. Variabel koleksi: `base_url` (`http://localhost:8000/api/v1`), `token`, `buku_id`, `peminjaman_id`.
+2. Jalankan **Auth / Login**, lalu salin `data.access_token` ke variabel `token`.
+3. Jalankan request lain secara berurutan. Pastikan header `Accept: application/json` terkirim, sebab tanpa header ini Laravel dapat me-redirect ke HTML, bukan JSON 422.
+4. Kontrak layanan: tempel `docs/openapi-sipus-v1.yaml` ke https://editor.swagger.io untuk dokumentasi interaktif.
+
+### 4.3 Pengujian cepat dengan cURL
+
+Di PowerShell gunakan `curl.exe` (bukan `curl`, yang merupakan alias `Invoke-WebRequest`).
+
+```bash
+# SOAP: sukses dan Fault (contoh request tersedia di docs/soap/)
+curl.exe -i -X POST http://localhost:8000/soap/sipus -H "Content-Type: text/xml; charset=utf-8" --data-binary "@docs/soap/request-aktif.xml"
+curl.exe -i -X POST http://localhost:8000/soap/sipus -H "Content-Type: text/xml; charset=utf-8" --data-binary "@docs/soap/request-nim-kosong.xml"
+
+# REST: katalog publik
+curl.exe -i -H "Accept: application/json" "http://localhost:8000/api/v1/bukus?per_page=3&sort=stok&dir=desc"
+
+# REST: tanpa token harus 401 (application/problem+json)
+curl.exe -i -X POST -H "Accept: application/json" http://localhost:8000/api/v1/bukus
+```
+
+Berkas contoh SOAP: `request-aktif.xml` (NIM `12S24001`, punya pinjaman aktif), `request-bersih.xml` (NIM `12S24003`, hanya riwayat dikembalikan), `request-nim-kosong.xml` (memicu Fault), `request-cacat.xml` (XML cacat, memicu Fault).
+
+### 4.4 Catatan keamanan
+
+- Berkas `.env` masuk `.gitignore` dan tidak pernah di-commit. Tersedia hanya `.env.example`.
+- Tidak ada Personal Access Token GitHub (`ghp_...`) di kode maupun README. Token pada screenshot disensor.
+- Parser XML SOAP memakai `LIBXML_NONET` (mencegah XXE/SSRF), dan nilai yang ditulis ke XML di-escape dengan `htmlspecialchars(..., ENT_XML1)`.
+- Pesan login sengaja sama untuk email salah maupun password salah (mencegah *user enumeration*).
+
+---
 
 ## 5. Galeri Bukti Pengujian
 
-Slot screenshot berikut diisi manual mahasiswa:
+Tujuh bukti wajib sesuai butir 5.3.5 modul. Simpan berkas gambar di `docs/screenshots/` dengan nama persis seperti di bawah agar gambar tampil di README.
 
-- (a) SOAP XML dan `<soap:Fault>` — `docs/screenshots/01-soap.png` — `[TEMPEL SCREENSHOT DI SINI]`
-- (b) Login token — `docs/screenshots/02-login.png` — `[TEMPEL SCREENSHOT DI SINI]`
-- (c) Katalog pagination dan HATEOAS — `docs/screenshots/03-katalog.png` — `[TEMPEL SCREENSHOT DI SINI]`
-- (d) POST buku 201 dan Location — `docs/screenshots/04-post-buku.png` — `[TEMPEL SCREENSHOT DI SINI]`
-- (e) PUT vs PATCH — `docs/screenshots/05-put-patch.png` — `[TEMPEL SCREENSHOT DI SINI]`
-- (f) Sukses, stok habis 422, dan duplikat 409 — `docs/screenshots/06-peminjaman.png` — `[TEMPEL SCREENSHOT DI SINI]`
-- (g) GitHub REST API dengan token disensor — `docs/screenshots/07-github.png` — `[TEMPEL SCREENSHOT DI SINI]`
+### (a) Uji SOAP XML dan `<soap:Fault>`
+Request: `POST /soap/sipus` dengan `request-aktif.xml` (sukses: `active_loans` > 0, `is_cleared` = `false`) dan `request-nim-kosong.xml` (Fault `soap:Client`). Opsional: `request-bersih.xml` untuk `is_cleared` = `true`.
 
-Ambil bukti dengan menjalankan `php artisan serve`, login untuk memperoleh token, lalu jalankan request Postman dan simpan respons/status/header sesuai nama slot.
+![Bukti SOAP](docs/screenshots/01-soap.png)
+
+### (b) Login Bearer Token
+Request: `POST /api/v1/auth/login` dengan akun uji. Tampak `token_type: Bearer` dan `access_token` (**sensor sebagian token**).
+
+![Bukti login token](docs/screenshots/02-login.png)
+
+### (c) GET Katalog terpaginasi dan HATEOAS
+Request: `GET /api/v1/bukus?per_page=3&sort=stok&dir=desc`. Tampak `data[]`, `links`/`meta` paginasi, dan `_links` (termasuk `pinjam_buku` pada buku yang stoknya > 0).
+
+![Bukti katalog](docs/screenshots/03-katalog.png)
+
+### (d) POST Buku 201 Created dan header `Location`
+Request: `POST /api/v1/bukus` dengan Bearer Token. Tampak status **201 Created** dan tab Headers berisi `Location: .../api/v1/bukus/{id}`.
+
+![Bukti POST buku](docs/screenshots/04-post-buku.png)
+
+### (e) Perbedaan PUT vs PATCH
+`PATCH` dengan `{"stok": 5}`: atribut lain (termasuk `sinopsis`) tetap. `PUT` tanpa `sinopsis`: `sinopsis` menjadi `null`.
+
+![Bukti PUT vs PATCH](docs/screenshots/05-put-patch.png)
+
+### (f) Peminjaman sukses, stok habis (422), dan duplikat (409)
+- Sukses 201 + `Location`: `POST /api/v1/peminjamans` pada buku yang stoknya > 0.
+- Stok habis **422**: gunakan buku `[TEST] Buku Stok Habis` (ISBN `9780000000001`, dari `BukuTestSeeder`).
+- Duplikat **409**: kirim ulang NIM yang sama pada buku yang stoknya ≥ 2 (stok diperiksa lebih dulu daripada duplikasi).
+
+![Bukti peminjaman](docs/screenshots/06-peminjaman.png)
+
+### (g) Latihan GitHub REST API (token disensor)
+`GET https://api.github.com/users/{username}` dan `PATCH https://api.github.com/user` (status 200, `x-ratelimit-limit` naik dari 60 ke 5000), serta uji negatif 401 `Bad credentials`. **Token harus disensor.**
+
+![Bukti GitHub API](docs/screenshots/07-github.png)
+
+---
+
+## 6. Pemetaan terhadap Spesifikasi & Rubrik
+
+| No | Spesifikasi (bobot) | Bukti di repositori |
+|---|---|---|
+| 1 | Analisis kelayakan & SOAP bebas pustaka (15%) | Bagian 2 README. `app/Http/Controllers/Soap/LibrarySoapController.php` (WSDL, kueri `peminjamans` berstatus `dipinjam`, `<soap:Fault>`). Rute di `routes/web.php`. Contoh request di `docs/soap/` |
+| 2 | REST API Provider katalog buku (25%) | `BukuApiController`, `BukuResource`, `ApiResponse` trait. Filter, search, sort, paginasi dengan eager loading `with('kategori')`. PUT vs PATCH, 201 + `Location`, 204, 404, 409 |
+| 3 | Sirkulasi ACID & Bearer Token (30%) | `AuthTokenController` (login/me/logout via Sanctum). `PeminjamanApiController` dengan `DB::transaction()` + `lockForUpdate()` untuk pinjam dan kembalikan. Rute mutasi berada di grup `auth:sanctum` |
+| 4 | HATEOAS, RFC 7807 global, Consumer (15%) | `_links` dinamis (bagian 3.3). Handler 401/404/422 (plus 400/403/405/429/500) di `bootstrap/app.php`. `referensiEksternal()` memakai `Http::timeout(8)` dengan fallback 404/502/504 |
+| 5 | OpenAPI, Postman, bukti uji, Git (15%) | `docs/openapi-sipus-v1.yaml`, `docs/SIPUS-Del-APIv1.postman_collection.json`, bagian 5 README, riwayat commit bertahap berformat *Conventional Commits* pada branch `week9-rest-api` |
+
+**Struktur artefak Minggu 9**
+
+```text
+app/Http/Controllers/Soap/LibrarySoapController.php
+app/Http/Controllers/Api/V1/{AuthTokenController,BukuApiController,PeminjamanApiController}.php
+app/Http/Resources/Api/V1/{BukuResource,PeminjamanResource}.php
+app/Traits/ApiResponse.php
+routes/api.php        bootstrap/app.php
+tests/Feature/Api/ApiV1Test.php
+docs/openapi-sipus-v1.yaml
+docs/SIPUS-Del-APIv1.postman_collection.json
+docs/soap/*.xml       docs/screenshots/*.png
+```
+
+---
+
+## Lampiran — Dokumentasi Minggu 06
+
+Bagian berikut adalah dokumentasi tugas Minggu 6 (antarmuka web Blade, ACID, Query Builder, session) yang tetap dipertahankan.
 
 ---
 
