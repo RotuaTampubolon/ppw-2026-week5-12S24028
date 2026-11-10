@@ -6,6 +6,7 @@ use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
+use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 return Application::configure(basePath: dirname(__DIR__))
@@ -51,6 +52,27 @@ return Application::configure(basePath: dirname(__DIR__))
             if ($r->is('api/*')) {
                 return $problem($r, 'endpoint-not-found', 'Not Found', 404,
                     'Alamat URI endpoint atau resource yang diminta tidak ditemukan.');
+            }
+        });
+
+        $exceptions->render(function (HttpExceptionInterface $e, Request $r) use ($problem) {
+            if ($r->is('api/*') && $e->getStatusCode() !== 404) {
+                $status = $e->getStatusCode();
+                return $problem($r, 'http-error', match ($status) {
+                    400 => 'Bad Request',
+                    403 => 'Forbidden',
+                    405 => 'Method Not Allowed',
+                    422 => 'Unprocessable Content',
+                    429 => 'Too Many Requests',
+                    default => 'HTTP Error',
+                }, $status, $e->getMessage() ?: 'Permintaan tidak dapat diproses.');
+            }
+        });
+
+        $exceptions->render(function (Throwable $e, Request $r) use ($problem) {
+            if ($r->is('api/*') && ! config('app.debug')) {
+                return $problem($r, 'server-error', 'Internal Server Error', 500,
+                    'Terjadi kesalahan internal pada server.');
             }
         });
     })->create();
